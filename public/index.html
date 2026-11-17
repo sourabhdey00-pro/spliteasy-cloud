@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SplitEasy — Cloud Expense Splitter</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --text:#e2e8f0; --muted:#94a3b8; --accent:#22c55e; --red:#f87171; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--text); }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 20px 60px; }
+  h1 { margin:0 0 4px; font-size: 2rem; } h1 span { color: var(--accent); }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .card { background: var(--card); border:1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 18px; }
+  h2 { font-size: 1.05rem; margin: 0 0 14px; }
+  label { font-size: .8rem; color: var(--muted); display:block; margin-bottom: 4px; }
+  input { width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--line); background:#0b1220; color:var(--text); font-size: .95rem; }
+  .row { display:grid; grid-template-columns: 1fr 1fr 2fr auto; gap:10px; align-items:end; }
+  button { padding:10px 16px; border:0; border-radius:8px; background:var(--accent); color:#052e13; font-weight:700; cursor:pointer; font-size:.95rem; }
+  button.ghost { background:transparent; color:var(--muted); border:1px solid var(--line); font-weight:500; }
+  table { width:100%; border-collapse: collapse; font-size:.92rem; }
+  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); }
+  th { color: var(--muted); font-weight:500; }
+  .pay { display:flex; justify-content:space-between; padding:10px 12px; background:#0b1220; border-radius:8px; margin-bottom:8px; }
+  .pos { color: var(--accent); } .neg { color: var(--red); }
+  .muted { color: var(--muted); font-size:.85rem; }
+  .actions { display:flex; gap:10px; margin-top:14px; }
+  @media (max-width: 640px) { .row { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Split<span>Easy</span></h1>
+  <p class="sub">Add trip or hostel expenses. The cloud function works out who pays whom, with the fewest payments.</p>
+
+  <div class="card">
+    <h2>Add an expense</h2>
+    <div class="row">
+      <div><label>Paid by</label><input id="payer" placeholder="Amit"></div>
+      <div><label>Amount (₹)</label><input id="amount" type="number" min="1" placeholder="600"></div>
+      <div><label>Split between (comma separated)</label><input id="parts" placeholder="Amit, Riya, Sam"></div>
+      <button onclick="addExpense()">Add</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Expenses</h2>
+    <table><thead><tr><th>Paid by</th><th>Amount</th><th>Split between</th><th></th></tr></thead><tbody id="list"></tbody></table>
+    <div class="actions">
+      <button onclick="calculate()">Settle up ☁️</button>
+      <button class="ghost" onclick="loadDemo()">Load demo</button>
+      <button class="ghost" onclick="clearAll()">Clear</button>
+    </div>
+  </div>
+
+  <div class="card" id="result" style="display:none">
+    <h2>Who pays whom</h2>
+    <div id="payments"></div>
+    <h2 style="margin-top:18px">Balances</h2>
+    <div id="balances"></div>
+    <p class="muted" id="meta"></p>
+  </div>
+</div>
+
+<script>
+  let expenses = JSON.parse(localStorageGet('expenses') || '[]');
+  function localStorageGet(k){ try { return localStorage.getItem(k); } catch { return null; } }
+  function save(){ try { localStorage.setItem('expenses', JSON.stringify(expenses)); } catch {} }
+  const money = n => '₹' + Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  function render() {
+    document.getElementById('list').innerHTML = expenses.length ? expenses.map((e, i) =>
+      `<tr><td>${esc(e.payer)}</td><td>${money(e.amount)}</td><td>${e.participants.map(esc).join(', ')}</td>
+       <td><button class="ghost" onclick="removeExp(${i})">✕</button></td></tr>`).join('')
+      : '<tr><td colspan="4" class="muted">No expenses yet.</td></tr>';
+  }
+  function addExpense() {
+    const payer = document.getElementById('payer').value.trim();
+    const amount = parseFloat(document.getElementById('amount').value);
+    let participants = document.getElementById('parts').value.split(',').map(s => s.trim()).filter(Boolean);
+    if (!payer || !(amount > 0)) return alertBox('Enter who paid and a valid amount.');
+    if (!participants.length) participants = [payer];
+    expenses.push({ payer, amount, participants }); save(); render();
+    document.getElementById('amount').value = '';
+  }
+  function removeExp(i){ expenses.splice(i,1); save(); render(); }
+  function clearAll(){ expenses = []; save(); render(); document.getElementById('result').style.display='none'; }
+  function loadDemo(){
+    expenses = [
+      { payer:'Amit', amount:1200, participants:['Amit','Riya','Sam','Neha'] },
+      { payer:'Riya', amount:600,  participants:['Riya','Sam'] },
+      { payer:'Neha', amount:900,  participants:['Amit','Riya','Sam','Neha'] }
+    ]; save(); render();
+  }
+  function alertBox(msg){ const r=document.getElementById('result'); r.style.display='block';
+    document.getElementById('payments').innerHTML = `<p class="neg">${esc(msg)}</p>`;
+    document.getElementById('balances').innerHTML=''; document.getElementById('meta').textContent=''; }
+
+  async function calculate() {
+    if (!expenses.length) return alertBox('Add at least one expense first.');
+    try {
+      const res = await fetch('/api/split', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ expenses }) });
+      const data = await res.json();
+      if (!res.ok) return alertBox(data.error || 'Server error');
+      document.getElementById('payments').innerHTML = data.payments.length
+        ? data.payments.map(p => `<div class="pay"><span><b>${esc(p.from)}</b> → <b>${esc(p.to)}</b></span><span class="pos">${money(p.amount)}</span></div>`).join('')
+        : '<p class="muted">Everyone is settled 🎉</p>';
+      document.getElementById('balances').innerHTML = '<table>' + Object.entries(data.balances).map(([n,b]) =>
+        `<tr><td>${esc(n)}</td><td class="${b>=0?'pos':'neg'}">${b>=0?'gets back':'owes'} ${money(Math.abs(b))}</td></tr>`).join('') + '</table>';
+      document.getElementById('meta').textContent = `Total spent ${money(data.total)} · computed by ${data.computedBy} at ${new Date(data.at).toLocaleTimeString()}`;
+      document.getElementById('result').style.display = 'block';
+    } catch (err) { alertBox('Could not reach the cloud API: ' + err.message); }
+  }
+  render();
+</script>
+</body>
+</html>
