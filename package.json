@@ -1,0 +1,9 @@
+{
+  "name": "spliteasy-cloud",
+  "version": "1.0.0",
+  "description": "Cloud expense splitter: static frontend + Vercel serverless API",
+  "private": true,
+  "scripts": {
+    "test": "node test.js"
+  }
+}
